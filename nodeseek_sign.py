@@ -166,7 +166,7 @@ def session_login(user, password, solver_type, api_base_url, client_key):
             print("正在使用 2Captcha 解决验证码...")
             solver = TwoCaptchaSolver(
                 api_key=client_key,
-                api_base_url=api_base_url or "https://2captcha.com"
+                api_base_url=api_base_url or "https://api.2captcha.com"
             )
         else:  # 默认使用 turnstile_solver
             print("正在使用 TurnstileSolver 解决验证码...")

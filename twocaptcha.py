@@ -18,7 +18,7 @@ class TwoCaptchaSolver:
     def __init__(
         self, 
         api_key: str,
-        api_base_url: str = "https://2captcha.com",
+        api_base_url: str = "https://api.2captcha.com",
         max_retries: int = 20,
         retry_interval: int = 5,
         timeout: int = 60
@@ -35,8 +35,8 @@ class TwoCaptchaSolver:
         """
         self.api_key = api_key
         self.api_base_url = api_base_url
-        self.in_url = f"{api_base_url}/in.php"
-        self.res_url = f"{api_base_url}/res.php"
+        self.create_task_url = f"{api_base_url}/createTask"
+        self.get_result_url = f"{api_base_url}/getTaskResult"
         self.max_retries = max_retries
         self.retry_interval = retry_interval
         self.timeout = timeout
@@ -89,26 +89,27 @@ class TwoCaptchaSolver:
     ) -> Optional[str]:
         """创建验证码任务并返回任务ID"""
         
-        # 准备任务数据 - 2Captcha格式
-        params = {
-            "key": self.api_key,
-            "method": "turnstile",
-            "sitekey": sitekey,
-            "pageurl": url,
-            "json": 1  # 返回JSON格式结果
+        # 准备任务数据 - 使用JSON格式，与YesCaptcha类似
+        data = {
+            "clientKey": self.api_key,
+            "task": {
+                "type": "TurnstileTaskProxyless",
+                "websiteURL": url,
+                "websiteKey": sitekey
+            }
         }
         
         # 如果需要添加用户代理
         if user_agent:
-            params["userAgent"] = user_agent
+            data["task"]["userAgent"] = user_agent
             
         try:
             if verbose:
                 print(f"发送创建任务请求...")
                 
-            response = requests.get(
-                self.in_url, 
-                params=params,
+            response = requests.post(
+                self.create_task_url, 
+                json=data,
                 timeout=self.timeout,
                 impersonate="chrome110"
             )
@@ -117,13 +118,13 @@ class TwoCaptchaSolver:
             if verbose:
                 print(f"创建任务响应: {result}")
                 
-            if result.get("status") == 1:
-                task_id = result.get("request")
+            if result.get("errorId") == 0:
+                task_id = result.get("taskId")
                 if verbose:
                     print(f"成功创建任务，ID: {task_id}")
                 return task_id
             else:
-                error_desc = result.get('error_text', '未知错误')
+                error_desc = result.get('errorDescription', '未知错误')
                 if verbose:
                     print(f"创建任务失败: {error_desc}")
                 return None
@@ -136,11 +137,9 @@ class TwoCaptchaSolver:
     def _get_task_result(self, task_id: str, verbose: bool = False) -> Optional[str]:
         """获取任务结果"""
         
-        params = {
-            "key": self.api_key,
-            "action": "get",
-            "id": task_id,
-            "json": 1  # 返回JSON格式结果
+        data = {
+            "clientKey": self.api_key,
+            "taskId": task_id
         }
         
         for attempt in range(1, self.max_retries + 1):
@@ -148,33 +147,35 @@ class TwoCaptchaSolver:
                 if verbose:
                     print(f"尝试获取任务结果 ({attempt}/{self.max_retries})...")
                     
-                response = requests.get(
-                    self.res_url,
-                    params=params,
+                response = requests.post(
+                    self.get_result_url,
+                    json=data,
                     timeout=self.timeout,
                     impersonate="chrome110"
                 )
                 result = response.json()
                 
-                if result.get("status") == 0:
-                    error_desc = result.get('request', '未知错误')
-                    # 如果是CAPCHA_NOT_READY错误，表示正在处理中
-                    if error_desc == "CAPCHA_NOT_READY":
-                        if verbose:
-                            print(f"任务处理中，等待 {self.retry_interval} 秒后重试...")
-                        time.sleep(self.retry_interval)
-                        continue
-                    else:
-                        if verbose:
-                            print(f"获取结果失败: {error_desc}")
-                        return None
+                if result.get("errorId") > 0:
+                    error_desc = result.get('errorDescription', '未知错误')
+                    if verbose:
+                        print(f"获取结果失败: {error_desc}")
+                    return None
                 
-                # 状态为1表示已完成
-                if result.get("status") == 1:
-                    token = result.get("request")
+                status = result.get("status")
+                
+                # 状态为ready表示已完成
+                if status == "ready":
+                    token = result.get("solution", {}).get("token")
                     if verbose:
                         print("任务已完成")
                     return token
+                
+                # 状态为processing表示处理中，需等待重试
+                elif status == "processing":
+                    if verbose:
+                        print(f"任务处理中，等待 {self.retry_interval} 秒后重试...")
+                    time.sleep(self.retry_interval)
+                    continue
                     
             except Exception as e:
                 if verbose:

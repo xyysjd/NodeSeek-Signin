@@ -106,7 +106,7 @@ docker run -itd   --name cloudflyer   -p 3000:3000   --restart unless-stopped   
 | `PASS1`/`PASS2`... | NodeSeek 论坛密码 |
 | `SOLVER_TYPE` | 设置为 `2captcha` |
 
-> **提示**：2Captcha 提供全球服务，默认使用 `https://2captcha.com` 节点
+> **提示**：2Captcha 提供全球服务，默认使用 `https://api.2captcha.com` 节点
 
 ### 多账号配置方法
 
