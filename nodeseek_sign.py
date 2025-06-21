@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from curl_cffi import requests
 from yescaptcha import YesCaptchaSolver, YesCaptchaSolverError
 from turnstile_solver import TurnstileSolver, TurnstileSolverError
+from twocaptcha import TwoCaptchaSolver, TwoCaptchaSolverError
 # ---------------- 通知模块动态加载 ----------------
 hadsend = False
 send = None
@@ -99,7 +100,7 @@ def delete_ql_env(var_name: str):
         else:
             print(f"未找到环境变量: {var_name}")
             return True
-    except (TurnstileSolverError, YesCaptchaSolverError) as e:
+    except (TurnstileSolverError, YesCaptchaSolverError, TwoCaptchaSolverError) as e:
         print(f"验证码解析错误: {e}")
         return None
     except Exception as e:
@@ -160,6 +161,12 @@ def session_login(user, password, solver_type, api_base_url, client_key):
             solver = YesCaptchaSolver(
                 api_base_url=api_base_url or "https://api.yescaptcha.com",
                 client_key=client_key
+            )
+        elif solver_type.lower() == "2captcha":
+            print("正在使用 2Captcha 解决验证码...")
+            solver = TwoCaptchaSolver(
+                api_key=client_key,
+                api_base_url=api_base_url or "https://2captcha.com"
             )
         else:  # 默认使用 turnstile_solver
             print("正在使用 TurnstileSolver 解决验证码...")
